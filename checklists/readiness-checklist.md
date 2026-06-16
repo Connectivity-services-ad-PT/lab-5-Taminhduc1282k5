@@ -1,16 +1,16 @@
-# Readiness Checklist – Lab 05
+﻿# Readiness Checklist â€“ LabÂ 05
 
-Đây là danh sách kiểm tra (checklist) để đảm bảo stack Docker Compose của bạn đã sẵn sàng trước khi gửi bài. Hãy tick vào mỗi mục sau khi hoàn thành.
+ÄÃ¢y lÃ  danh sÃ¡ch kiá»ƒm tra (checklist) Ä‘á»ƒ Ä‘áº£m báº£o stack DockerÂ Compose cá»§a báº¡n Ä‘Ã£ sáºµn sÃ ng trÆ°á»›c khi gá»­i bÃ i. HÃ£y tick vÃ o má»—i má»¥c sau khi hoÃ n thÃ nh.
 
-- [ ] **Database ready:** container DB đã chạy và phản hồi `pg_isready`. Kiểm tra bằng `docker exec -it fit4110-db-lab05 pg_isready -U $POSTGRES_USER`.
-- [ ] **AI service ready:** container AI service trả về `200` cho endpoint `/health` và `/predict` hoạt động.
-- [ ] **API ready:** container API trả `200` cho `/health` và có thể tạo/lấy readings khi token hợp lệ.
-- [ ] **Environment variables:** `.env` đã được thiết lập đúng (APP_PORT, POSTGRES_USER, AUTH_TOKEN,…). Không sử dụng secret thật; lưu secret vào `.env` cục bộ, commit `.env.example`.
-- [ ] **Network & Ports:** mạng `team-internal` hoạt động; API gọi được AI bằng hostname `ai-service`; ports 8000 (API), 9000 (AI) và 5432 (DB) được map đúng.
-- [ ] **Image tags:** bạn đã build image với tag `v0.1.0-<team>` và push lên registry (ghcr.io hoặc Docker Hub). Xác nhận rằng tag xuất hiện trong registry.
+- [x] **Database ready:** container DB Ä‘Ã£ cháº¡y vÃ  pháº£n há»“i `pg_isready`. Kiá»ƒm tra báº±ng `docker exec -it fit4110-db-lab05 pg_isready -U $POSTGRES_USER`.
+- [x] **AI service ready:** container AI service tráº£ vá» `200` cho endpoint `/health` vÃ  `/predict` hoáº¡t Ä‘á»™ng.
+- [x] **API ready:** container API tráº£ `200` cho `/health` vÃ  cÃ³ thá»ƒ táº¡o/láº¥y readings khi token há»£p lá»‡.
+- [x] **Environment variables:** `.env` Ä‘Ã£ Ä‘Æ°á»£c thiáº¿t láº­p Ä‘Ãºng (APP_PORT, POSTGRES_USER, AUTH_TOKEN,â€¦). KhÃ´ng sá»­ dá»¥ng secret tháº­t; lÆ°u secret vÃ o `.env` cá»¥c bá»™, commit `.env.example`.
+- [x] **Network & Ports:** máº¡ng `team-internal` hoáº¡t Ä‘á»™ng; API gá»i Ä‘Æ°á»£c AI báº±ng hostname `ai-service`; ports 8000 (API), 9000 (AI) vÃ  5432 (DB) Ä‘Æ°á»£c map Ä‘Ãºng.
+- [x] **Image tags:** báº¡n Ä‘Ã£ build image vá»›i tag `v0.1.0-<team>` vÃ  push lÃªn registry (ghcr.io hoáº·c DockerÂ Hub). XÃ¡c nháº­n ráº±ng tag xuáº¥t hiá»‡n trong registry.
 
-Ghi chú thêm những vấn đề gặp phải hoặc điều chỉnh tại đây:
+Ghi chÃº thÃªm nhá»¯ng váº¥n Ä‘á» gáº·p pháº£i hoáº·c Ä‘iá»u chá»‰nh táº¡i Ä‘Ã¢y:
 
 ```
-- Mô tả…
+- MÃ´ táº£â€¦
 ```
