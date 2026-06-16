@@ -1,26 +1,84 @@
-import os
+﻿import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
+import psycopg
+import requests
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-# Đọc biến môi trường với giá trị mặc định
 SERVICE_NAME = os.getenv("SERVICE_NAME", "iot-ingestion")
 SERVICE_VERSION = os.getenv("SERVICE_VERSION", "0.5.0")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "local-dev-token")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "lab05")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "lab05pass")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "iotdb")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:9000").rstrip("/")
+
+
+def database_url() -> str:
+    return (
+        f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+        f"@{DB_HOST}:{DB_PORT}/{POSTGRES_DB}"
+    )
+
+
+def get_connection():
+    return psycopg.connect(database_url())
+
+
+def init_database() -> None:
+    with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sensor_readings (
+                reading_id TEXT PRIMARY KEY,
+                device_id TEXT NOT NULL,
+                metric TEXT NOT NULL,
+                value DOUBLE PRECISION NOT NULL,
+                unit TEXT,
+                timestamp TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                ai_objects TEXT,
+                ai_confidence TEXT
+            )
+            """
+        )
+        conn.commit()
+
+
+def check_database() -> bool:
+    with get_connection() as conn:
+        conn.execute("SELECT 1")
+    return True
+
+
+def check_ai_service() -> bool:
+    response = requests.get(f"{AI_SERVICE_URL}/health", timeout=3)
+    response.raise_for_status()
+    return response.json().get("status") == "ok"
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_database()
+    yield
 
 
 app = FastAPI(
     title="FIT4110 Lab 05 - IoT Ingestion Service",
     version=SERVICE_VERSION,
     description=(
-        "IoT Ingestion API chạy trong ngữ cảnh Docker Compose cho Lab 05. "
-        "Luồng logic được kế thừa từ Lab 04 và tiếp tục được dùng để kiểm thử end‑to‑end."
+        "IoT Ingestion API runs in a Docker Compose stack for Lab 05. "
+        "It stores readings in PostgreSQL and calls the internal AI service."
     ),
+    lifespan=lifespan,
 )
 
 
@@ -50,6 +108,8 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
+    database: str
+    ai_service: str
 
 
 class SensorReadingCreate(BaseModel):
@@ -59,7 +119,7 @@ class SensorReadingCreate(BaseModel):
         ...,
         ge=-40,
         le=80,
-        description="Boundary range used in Lab 03 và Lab 04: -40 đến 80.",
+        description="Boundary range used in Lab 03 and Lab 04: -40 to 80.",
         examples=[31.5],
     )
     unit: Optional[SensorUnit] = Field(default=None, examples=["celsius"])
@@ -74,6 +134,8 @@ class SensorReading(BaseModel):
     unit: Optional[SensorUnit] = None
     timestamp: str
     created_at: str
+    ai_objects: Optional[str] = None
+    ai_confidence: Optional[str] = None
 
 
 class SensorReadingCreated(BaseModel):
@@ -82,9 +144,6 @@ class SensorReadingCreated(BaseModel):
     metric: SensorMetric
     accepted: bool
     created_at: str
-
-
-READINGS: List[Dict] = []
 
 
 def build_problem(
@@ -185,15 +244,38 @@ def now_iso() -> str:
 
 def next_reading_id() -> str:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
-    return f"R-{today}-{len(READINGS) + 1:04d}"
+    with get_connection() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM sensor_readings WHERE reading_id LIKE %s",
+            (f"R-{today}-%",),
+        ).fetchone()[0]
+    return f"R-{today}-{count + 1:04d}"
+
+
+def row_to_dict(row) -> Dict:
+    return {
+        "reading_id": row[0],
+        "device_id": row[1],
+        "metric": row[2],
+        "value": row[3],
+        "unit": row[4],
+        "timestamp": row[5],
+        "created_at": row[6],
+        "ai_objects": row[7],
+        "ai_confidence": row[8],
+    }
 
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
+    db_status = "ok" if check_database() else "error"
+    ai_status = "ok" if check_ai_service() else "error"
     return HealthResponse(
         status="ok",
         service=SERVICE_NAME,
         version=SERVICE_VERSION,
+        database=db_status,
+        ai_service=ai_status,
     )
 
 
@@ -209,23 +291,37 @@ def health() -> HealthResponse:
     },
 )
 def create_reading(payload: SensorReadingCreate, response: Response) -> SensorReadingCreated:
-    # Ví dụ logic cảnh báo: nếu nhiệt độ >= 70 thì thêm header cảnh báo
     if payload.metric == SensorMetric.temperature and payload.value >= 70:
         response.headers["X-Warning"] = "high-temperature"
 
     reading_id = next_reading_id()
     created_at = now_iso()
 
-    item = {
-        "reading_id": reading_id,
-        "device_id": payload.device_id,
-        "metric": payload.metric.value,
-        "value": payload.value,
-        "unit": payload.unit.value if payload.unit else None,
-        "timestamp": payload.timestamp,
-        "created_at": created_at,
-    }
-    READINGS.append(item)
+    prediction = requests.post(f"{AI_SERVICE_URL}/predict", timeout=3).json()
+    ai_objects = ",".join(prediction.get("objects", []))
+    ai_confidence = ",".join(str(value) for value in prediction.get("confidence", []))
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO sensor_readings (
+                reading_id, device_id, metric, value, unit, timestamp,
+                created_at, ai_objects, ai_confidence
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                reading_id,
+                payload.device_id,
+                payload.metric.value,
+                payload.value,
+                payload.unit.value if payload.unit else None,
+                payload.timestamp,
+                created_at,
+                ai_objects,
+                ai_confidence,
+            ),
+        )
+        conn.commit()
 
     return SensorReadingCreated(
         reading_id=reading_id,
@@ -241,19 +337,44 @@ def latest_readings(
     device_id: Optional[str] = Query(default=None),
     limit: int = Query(default=10, ge=1, le=100),
 ) -> Dict[str, List[Dict]]:
-    items = READINGS
-
+    params = []
+    where_clause = ""
     if device_id:
-        items = [item for item in items if item["device_id"] == device_id]
+        where_clause = "WHERE device_id = %s"
+        params.append(device_id)
 
-    return {"items": items[-limit:]}
+    params.append(limit)
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT reading_id, device_id, metric, value, unit, timestamp,
+                   created_at, ai_objects, ai_confidence
+            FROM sensor_readings
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            params,
+        ).fetchall()
+
+    return {"items": [row_to_dict(row) for row in rows]}
 
 
 @app.get("/readings/{reading_id}", dependencies=[Depends(verify_bearer_token)])
 def get_reading(reading_id: str) -> Dict:
-    for item in READINGS:
-        if item["reading_id"] == reading_id:
-            return item
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT reading_id, device_id, metric, value, unit, timestamp,
+                   created_at, ai_objects, ai_confidence
+            FROM sensor_readings
+            WHERE reading_id = %s
+            """,
+            (reading_id,),
+        ).fetchone()
+
+    if row:
+        return row_to_dict(row)
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,

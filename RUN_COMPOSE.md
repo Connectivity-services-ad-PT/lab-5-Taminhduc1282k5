@@ -1,10 +1,10 @@
-# RUN_COMPOSE.md – Hướng dẫn chạy Lab 05
+﻿# RUN_COMPOSE.md â€“ HÆ°á»›ng dáº«n cháº¡y LabÂ 05
 
-Tài liệu này hướng dẫn người khác clone repo sạch và chạy lại stack Compose của Lab 05.
+TÃ i liá»‡u nÃ y hÆ°á»›ng dáº«n ngÆ°á»i khÃ¡c clone repo sáº¡ch vÃ  cháº¡y láº¡i stack Compose cá»§a LabÂ 05.
 
 ---
 
-## 1. Clone repo
+##Â 1.Â Clone repo
 
 ```bash
 git clone <repo-url>
@@ -13,7 +13,7 @@ cd FIT4110_lab05_docker_compose_readiness
 
 ---
 
-## 2. Cài dependencies cho Newman/Prism/Spectral (tuỳ chọn)
+##Â 2.Â CÃ i dependencies cho Newman/Prism/Spectral (tuá»³ chá»n)
 
 ```bash
 npm install
@@ -21,29 +21,30 @@ npm install
 
 ---
 
-## 3. Build & chạy stack Docker Compose
+##Â 3.Â Build & cháº¡y stack DockerÂ Compose
 
 ```bash
-# Copy .env.example sang .env và chỉnh sửa nếu cần
+# Copy .env.example sang .env vÃ  chá»‰nh sá»­a náº¿u cáº§n
 cp .env.example .env
 
-# Build images (nếu chưa có) và khởi động các container trong nền
+# Build images (náº¿u chÆ°a cÃ³) vÃ  khá»Ÿi Ä‘á»™ng cÃ¡c container trong ná»n
+docker network create class-net 2>/dev/null || true
 docker compose up -d --build
 ```
 
-Lệnh trên sẽ tạo các container:
+Lá»‡nh trÃªn sáº½ táº¡o cÃ¡c container:
 
 - `fit4110-db-lab05` (PostgreSQL)
-- `fit4110-ai-lab05` (AI service mẫu chạy port 9000)
-- `fit4110-api-lab05` (API FastAPI trên port 8000)
+- `fit4110-ai-lab05` (AI service máº«u cháº¡y portÂ 9000)
+- `fit4110-api-lab05` (API FastAPI trÃªn portÂ 8000)
 
-Theo dõi log:
+Theo dÃµi log:
 
 ```bash
 docker compose logs -f
 ```
 
-Sau vài giây, kiểm tra health của mỗi service:
+Sau vÃ i giÃ¢y, kiá»ƒm tra health cá»§a má»—i service:
 
 ```bash
 # API
@@ -56,7 +57,7 @@ curl http://localhost:9000/health
 docker exec -it fit4110-db-lab05 pg_isready -U $POSTGRES_USER
 ```
 
-Bạn cũng có thể truy cập endpoint `/predict` của AI service để xem kết quả mẫu:
+Báº¡n cÅ©ng cÃ³ thá»ƒ truy cáº­p endpoint `/predict` cá»§a AI service Ä‘á»ƒ xem káº¿t quáº£ máº«u:
 
 ```bash
 curl -X POST http://localhost:9000/predict
@@ -64,13 +65,13 @@ curl -X POST http://localhost:9000/predict
 
 ---
 
-## 4. Chạy Newman test trên stack Compose (tuỳ chọn)
+##Â 4.Â Cháº¡y Newman test trÃªn stack Compose (tuá»³ chá»n)
 
 ```bash
 npm run test:compose
 ```
 
-Report sinh tại:
+Report sinh táº¡i:
 
 ```text
 reports/newman-lab05-compose.xml
@@ -79,15 +80,15 @@ reports/newman-lab05-compose.html
 
 ---
 
-## 5. Dừng stack
+##Â 5.Â Dá»«ng stack
 
-Khi không cần nữa, dừng và xoá các container bằng:
+Khi khÃ´ng cáº§n ná»¯a, dá»«ng vÃ  xoÃ¡ cÃ¡c container báº±ng:
 
 ```bash
 docker compose down
 ```
 
-Nếu muốn xoá volume dữ liệu của DB, thêm tuỳ chọn `-v`:
+Náº¿u muá»‘n xoÃ¡ volume dá»¯ liá»‡u cá»§a DB, thÃªm tuá»³ chá»n `-v`:
 
 ```bash
 docker compose down -v
@@ -95,9 +96,9 @@ docker compose down -v
 
 ---
 
-## 6. Lệnh nhanh
+##Â 6.Â Lá»‡nh nhanh
 
-Bạn có thể dùng Makefile:
+Báº¡n cÃ³ thá»ƒ dÃ¹ng Makefile:
 
 ```bash
 make compose-up
@@ -107,8 +108,9 @@ make logs
 
 ---
 
-## 7. Mẹo gỡ lỗi
+##Â 7.Â Máº¹o gá»¡ lá»—i
 
-- Sử dụng `docker compose ps` để xem trạng thái container.
-- Nếu API trả lỗi kết nối DB, hãy kiểm tra biến môi trường `POSTGRES_*` trong `.env` và đảm bảo DB đã sẵn sàng (`pg_isready`).
-- Nếu AI service cần tải mô hình lớn, tăng `start_period` của healthcheck trong `docker-compose.yml`.
+- Sá»­ dá»¥ng `docker compose ps` Ä‘á»ƒ xem tráº¡ng thÃ¡i container.
+- Náº¿u API tráº£ lá»—i káº¿t ná»‘i DB, hÃ£y kiá»ƒm tra biáº¿n mÃ´i trÆ°á»ng `POSTGRES_*` trong `.env` vÃ  Ä‘áº£m báº£o DB Ä‘Ã£ sáºµn sÃ ng (`pg_isready`).
+- Náº¿u AI service cáº§n táº£i mÃ´ hÃ¬nh lá»›n, tÄƒng `start_period` cá»§a healthcheck trong `docker-compose.yml`.
+
