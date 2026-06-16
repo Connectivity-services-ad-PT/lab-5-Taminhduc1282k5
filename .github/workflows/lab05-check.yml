@@ -1,10 +1,13 @@
-﻿name: Lab 05 - Compose Readiness Check
+name: Lab 05 - Compose Readiness Check
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   compose-check:
@@ -13,28 +16,23 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      # 1. Checkout source
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 2. CÃ i Node.js + Newman Ä‘á»ƒ cháº¡y Postman test
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Newman + HTML reporter
+      - name: Install Newman and HTML reporter
         run: npm install -g newman newman-reporter-htmlextra
 
-      # 3. Táº¡o .env tá»« .env.example (khÃ´ng dÃ¹ng secret tháº­t)
       - name: Create .env from example
         run: cp .env.example .env
 
-      # 4. Lint docker-compose.yml (kiá»ƒm tra cÃº phÃ¡p)
       - name: Lint docker-compose.yml
         run: docker compose config --quiet
 
-      # 5. Build & start stack, Ä‘á»£i healthcheck pass (--wait)
       - name: Ensure external Docker network exists
         run: docker network inspect class-net >/dev/null 2>&1 || docker network create class-net
 
@@ -44,44 +42,43 @@ jobs:
       - name: Show running containers
         run: docker compose ps
 
-      # 6. Smoke test cÃ¡c endpoint /health
-      - name: Test API /health (port 8000)
+      - name: Test API health
         run: |
           for i in 1 2 3 4 5; do
             curl -fsS http://localhost:8000/health && exit 0
-            echo "Retry $i..."; sleep 5
+            echo "Retry $i..."
+            sleep 5
           done
           docker compose logs api
           exit 1
 
-      - name: Test AI service /health (port 9000)
+      - name: Test AI service health
         run: |
           for i in 1 2 3 4 5; do
             curl -fsS http://localhost:9000/health && exit 0
-            echo "Retry $i..."; sleep 5
+            echo "Retry $i..."
+            sleep 5
           done
           docker compose logs ai-service
           exit 1
 
-      - name: Test DB readiness (pg_isready)
+      - name: Test DB readiness
         run: |
-          set -a; source .env; set +a
-          docker compose exec -T db pg_isready -U "$POSTGRES_USER"
+          set -a
+          . ./.env
+          set +a
+          docker compose exec -T db pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 
-      # 7. Cháº¡y Newman test náº¿u cÃ³ collection
-      - name: Run Newman collection
+      - name: Run Newman collection if present
         run: |
           mkdir -p reports
           COLLECTION=$(find postman -maxdepth 3 -name "*.postman_collection.json" | head -n 1)
           ENVIRONMENT=$(find postman/environments -maxdepth 2 -name "*.postman_environment.json" | head -n 1)
 
           if [ -z "$COLLECTION" ]; then
-            echo "::warning::KhÃ´ng tÃ¬m tháº¥y Postman collection trong postman/ - bá» qua bÆ°á»›c Newman"
+            echo "No Postman collection found in postman/. Skipping Newman."
             exit 0
           fi
-
-          echo "Collection: $COLLECTION"
-          [ -n "$ENVIRONMENT" ] && echo "Environment: $ENVIRONMENT"
 
           newman run "$COLLECTION" \
             ${ENVIRONMENT:+-e "$ENVIRONMENT"} \
@@ -89,26 +86,23 @@ jobs:
             --reporter-junit-export reports/newman-lab05-compose.xml \
             --reporter-htmlextra-export reports/newman-lab05-compose.html
 
-      # 8. Kiá»ƒm tra readiness checklist (yÃªu cáº§u tá»‘i thiá»ƒu 6 má»¥c Ä‘Ã£ tick)
       - name: Verify readiness checklist
         run: |
           CHECKLIST="checklists/readiness-checklist.md"
           if [ ! -f "$CHECKLIST" ]; then
-            echo "::error::Thiáº¿u file $CHECKLIST"
+            echo "Missing $CHECKLIST"
             exit 1
           fi
 
           TOTAL=$(grep -cE '^[[:space:]]*-[[:space:]]*\[[ xX]\]' "$CHECKLIST" || true)
           CHECKED=$(grep -cE '^[[:space:]]*-[[:space:]]*\[[xX]\]' "$CHECKLIST" || true)
-
-          echo "Readiness checklist: ${CHECKED:-0}/${TOTAL:-0} má»¥c Ä‘Ã£ tick"
+          echo "Readiness checklist: ${CHECKED:-0}/${TOTAL:-0} checked"
 
           if [ "${CHECKED:-0}" -lt 6 ]; then
-            echo "::error::Lab yÃªu cáº§u tá»‘i thiá»ƒu 6 má»¥c readiness, hiá»‡n cÃ³ ${CHECKED:-0}"
+            echo "At least 6 readiness items must be checked. Current: ${CHECKED:-0}"
             exit 1
           fi
 
-      # 9. Upload report lÃ m artifact Ä‘á»ƒ táº£i vá»
       - name: Upload Newman reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -117,13 +111,10 @@ jobs:
           path: reports/
           if-no-files-found: warn
 
-      # 10. Dump log khi fail Ä‘á»ƒ debug
       - name: Dump Compose logs on failure
         if: failure()
         run: docker compose logs
 
-      # 11. Cleanup
       - name: Tear down Compose stack
         if: always()
         run: docker compose down -v
-
