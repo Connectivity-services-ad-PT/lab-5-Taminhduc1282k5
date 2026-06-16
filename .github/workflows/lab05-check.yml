@@ -63,11 +63,7 @@ jobs:
           exit 1
 
       - name: Test DB readiness
-        run: |
-          set -a
-          . ./.env
-          set +a
-          docker compose exec -T db pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+        run: docker compose exec -T db pg_isready -U lab05 -d iotdb
 
       - name: Run Newman collection if present
         run: |
